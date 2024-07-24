@@ -82,6 +82,7 @@ def process_text(text):
     return response
 
 if __name__ == "__main__":
+    import json
     # Call the select_language endpoint
     select_language_response = select_language("hu")
     if select_language_response.status_code == 200:
@@ -90,8 +91,8 @@ if __name__ == "__main__":
         print("Failed to select language")
     
     # Call the process_text endpoint
-    process_text_response = process_text("Hogy feldolgozni kell ezt a szveget?")
+    process_text_response = process_text("A kutya fut.")
     if process_text_response.status_code == 200:
-        print(process_text_response.json())
+        print(json.dumps(process_text_response.json(), indent=4, ensure_ascii=False))
     else:
         print("Failed to process text")
