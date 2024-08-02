@@ -91,7 +91,7 @@ if __name__ == "__main__":
         print("Failed to select language")
     
     # Call the process_text endpoint
-    process_text_response = process_text("A kutya fut.")
+    process_text_response = process_text("A fi iskolába megy.")
     if process_text_response.status_code == 200:
         print(json.dumps(process_text_response.json(), indent=4, ensure_ascii=False))
     else:
