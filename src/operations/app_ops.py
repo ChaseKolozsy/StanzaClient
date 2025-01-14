@@ -1,4 +1,5 @@
-import requests
+import httpx
+import asyncio
 
 BASE_URL = "http://localhost:5004"
 
@@ -72,12 +73,19 @@ language_abreviations = {
 class StanzaClient:
     def __init__(self):
         self.current_language = None
+        self.client = httpx.AsyncClient()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()
 
     def select_language(self, language):
         self.current_language = language
         return True
 
-    def process_text(self, text):
+    async def process_text(self, text):
         if not self.current_language:
             raise ValueError("Language not selected")
         
@@ -86,37 +94,37 @@ class StanzaClient:
             "language": self.current_language,
             "text": text
         }
-        response = requests.post(endpoint, json=data)
+        response = await self.client.post(endpoint, json=data)
         return response
 
 # Create a singleton instance
 _client = StanzaClient()
 
-# Keep the existing interface
+# Keep the existing interface but make process_text async
 def select_language(language):
     return _client.select_language(language)
 
-def process_text(text):
-    return _client.process_text(text)
+async def process_text(text):
+    return await _client.process_text(text)
 
+# Update the example code to use async
 if __name__ == "__main__":
     import json
-    # Call the select_language endpoint
-    select_language_response = select_language("hu")
-    if select_language_response.status_code == 200:
-        print("Language selected successfully")
-    else:
-        print("Failed to select language")
-    
-    # Call the process_text endpoint
-    process_text_response = process_text("Valakinek vagy valaminek a ismerete, vagy megismerése.")
-    if process_text_response.status_code == 200:
-        print(json.dumps(process_text_response.json(), indent=4, ensure_ascii=False))
-    else:
-        print("Failed to process text")
 
-    #process_text_response = process_text("Az a könyv nagyon érdekes.")
-    #if process_text_response.status_code == 200:
-    #    print(json.dumps(process_text_response.json(), indent=4, ensure_ascii=False))
-    #else:
-    #    print("Failed to process text")
+    async def main():
+        # Call the select_language endpoint
+        select_language_response = select_language("hu")
+        if select_language_response:
+            print("Language selected successfully")
+        else:
+            print("Failed to select language")
+        
+        # Call the process_text endpoint
+        process_text_response = await process_text("Valakinek vagy valaminek a ismerete, vagy megismerése.")
+        if process_text_response.status_code == 200:
+            print(json.dumps(process_text_response.json(), indent=4, ensure_ascii=False))
+        else:
+            print("Failed to process text")
+
+    # Run the async main function
+    asyncio.run(main())
