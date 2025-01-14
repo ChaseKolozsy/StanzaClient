@@ -2,8 +2,10 @@ import httpx
 import asyncio
 import time
 import json
+from typing import List
 
-BASE_URL = "http://localhost:5004"
+# Update BASE_URL to be a list of endpoints
+ENDPOINTS = ["http://localhost:5004", "http://localhost:5005"]
 
 language_abreviations = {
     "Hungarian": "hu",
@@ -76,6 +78,8 @@ class StanzaClient:
     def __init__(self):
         self.current_language = None
         self.client = httpx.AsyncClient()
+        self.current_endpoint = 0
+        self.batch_size = 1000  # Maximum batch size
 
     async def __aenter__(self):
         return self
@@ -87,14 +91,30 @@ class StanzaClient:
         self.current_language = language
         return True
 
-    async def process_text(self, text):
+    async def process_text(self, text: str):
         if not self.current_language:
             raise ValueError("Language not selected")
         
-        endpoint = BASE_URL + "/process"
+        endpoint = ENDPOINTS[self.current_endpoint] + "/process"
+        self.current_endpoint = (self.current_endpoint + 1) % len(ENDPOINTS)
+        
         data = {
             "language": self.current_language,
             "text": text
+        }
+        response = await self.client.post(endpoint, json=data)
+        return response
+
+    async def process_batch(self, texts: List[str]):
+        if not self.current_language:
+            raise ValueError("Language not selected")
+        
+        endpoint = ENDPOINTS[self.current_endpoint] + "/batch_process"
+        self.current_endpoint = (self.current_endpoint + 1) % len(ENDPOINTS)
+        
+        data = {
+            "language": self.current_language,
+            "texts": texts
         }
         response = await self.client.post(endpoint, json=data)
         return response
@@ -109,67 +129,124 @@ def select_language(language):
 async def process_text(text):
     return await _client.process_text(text)
 
-async def test_concurrent_processing():
-    # Hungarian test phrases
+async def test_processing(mode: str = "single"):
     hungarian_phrases = [
-        "A kutya az ember legjobb barátja.",           # The dog is man's best friend
-        "Esik az eső a mezőn.",                        # It's raining in the field
-        "A macska az asztalon alszik.",                # The cat is sleeping on the table
-        "Minden reggel kávét iszom.",                  # I drink coffee every morning
-        "A gyerekek a parkban játszanak.",             # The children are playing in the park
-        "A nap szépen süt ma.",                        # The sun is shining beautifully today
-        "A madarak az égen repülnek.",                 # The birds are flying in the sky
-        "Az idő gyorsan telik.",                       # Time passes quickly
-        "A könyv az asztalon van.",                    # The book is on the table
-        "A virágok tavasszal nyílnak.",                # Flowers bloom in spring
-        "Az autó az út szélén parkol.",                # The car is parked by the road
-        "A tanár magyarázza a leckét."                 # The teacher explains the lesson
+        "A kutya az ember legjobb barátja.",
+        "Esik az eső a mezőn.",
+        "A macska az asztalon alszik.",
+        "Minden reggel kávét iszom.",
+        "A gyerekek a parkban játszanak.",
+        "A nap szépen süt ma.",
+        "A madarak az égen repülnek.",
+        "Az idő gyorsan telik.",
+        "A könyv az asztalon van.",
+        "A virágok tavasszal nyílnak.",
+        "Az autó az út szélén parkol.",
+        "A tanár magyarázza a leckét.",
+        "A szél erősen fúj.",
+        "A hal úszik a vízben.",
+        "Az óra a falon lóg.",
+        "A diákok figyelnek az órán.",
+        "A telefon az asztalon csörög.",
+        "A vonat késve érkezik.",
+        "A levél lassan hullik.",
+        "Az orvos betegeket fogad.",
+        "A szakács finom ételt készít.",
+        "A mérnök új hidat tervez.",
+        "A festő képet fest.",
+        "A kertész virágokat ültet.",
+        "A pék friss kenyeret süt.",
+        "A postás leveleket hoz.",
+        "A színész szerepet tanul.",
+        "A zenész hangszeren játszik.",
+        "A pilóta repülőt vezet.",
+        "A tűzoltó tüzet olt.",
+        "A rendőr forgalmat irányít.",
+        "A szerelő autót javít.",
+        "A fodrász hajat vág.",
+        "A szabó ruhát varr.",
+        "A cipész cipőt készít.",
+        "A kovács vasat kalapál."
     ]
 
-    async def process_single_phrase(phrase):
-        try:
-            response = await process_text(phrase)
-            if response.status_code == 200:
-                result = response.json()
-                print(f"\nPhrase: {phrase}")
-                print(json.dumps(result, indent=4, ensure_ascii=False))
-                return result
-            else:
-                print(f"Failed to process phrase: {phrase}")
-                return None
-        except Exception as e:
-            print(f"Error processing phrase: {phrase}")
-            print(f"Error: {str(e)}")
-            return None
-
-    # First select Hungarian language
-    select_language_response = select_language("hu")
-    if not select_language_response:
-        print("Failed to select Hungarian language")
-        return
-
-    print("Processing 12 Hungarian phrases concurrently...")
+    select_language("hu")
     start_time = time.time()
+    batch_results = []
+    single_results = []
 
-    # Process all phrases concurrently
-    tasks = [process_single_phrase(phrase) for phrase in hungarian_phrases]
-    results = await asyncio.gather(*tasks)
+    if mode == "batch":
+        print(f"Processing {len(hungarian_phrases)} Hungarian phrases in batch mode...")
+        try:
+            response = await _client.process_batch(hungarian_phrases)
+            if response.status_code == 200:
+                batch_results = response.json()
+        except Exception as e:
+            print(f"Error in batch processing: {str(e)}")
+
+    else:  # single mode
+        print(f"Processing {len(hungarian_phrases)} Hungarian phrases in single mode...")
+        # Create tasks for all phrases
+        tasks = [_client.process_text(phrase) for phrase in hungarian_phrases]
+        
+        # Execute all tasks concurrently
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for phrase, response in zip(hungarian_phrases, responses):
+            try:
+                if isinstance(response, Exception):
+                    print(f"Error processing phrase: {str(response)}")
+                    continue
+                    
+                if response.status_code == 200:
+                    single_results.append(response.json())
+            except Exception as e:
+                print(f"Error processing phrase: {str(e)}")
 
     end_time = time.time()
     processing_time = end_time - start_time
 
-    # Print summary
-    successful = len([r for r in results if r is not None])
     print(f"\nProcessing Summary:")
+    print(f"Mode: {mode}")
     print(f"Total phrases processed: {len(hungarian_phrases)}")
-    print(f"Successful: {successful}")
-    print(f"Failed: {len(hungarian_phrases) - successful}")
     print(f"Total processing time: {processing_time:.2f} seconds")
     print(f"Average time per phrase: {processing_time/len(hungarian_phrases):.2f} seconds")
+    return batch_results, single_results
+
+async def test_endpoints():
+    """Test if both endpoints are accessible"""
+    try:
+        # Test single process endpoint with minimal valid payload
+        test_payload = {"language": "hu", "text": "test"}
+        response = await _client.client.post(ENDPOINTS[0] + "/process", json=test_payload)
+        if response.status_code != 200:
+            print(f"Warning: /process endpoint returned status {response.status_code} on {ENDPOINTS[0]}")
+            
+        # Test batch process endpoint with minimal valid payload
+        batch_payload = {"language": "hu", "texts": ["test"]}
+        response = await _client.client.post(ENDPOINTS[1] + "/batch_process", json=batch_payload)
+        if response.status_code != 200:
+            print(f"Warning: /batch_process endpoint returned status {response.status_code} on {ENDPOINTS[1]}")
+            
+    except Exception as e:
+        print(f"Error testing endpoints: {str(e)}")
+        return False
+    return True
 
 async def main():
-    await test_concurrent_processing()
+    # First test if endpoints are available
+    if await test_endpoints():
+        # Test both modes
+        print("Testing single mode:")
+        batch_results, single_results = await test_processing(mode="single")
+        
+        print("\nTesting batch mode:")
+        batch_results, single_results = await test_processing(mode="batch")
+        #for result in batch_results:
+        #    print(json.dumps(result, indent=4, ensure_ascii=False))
+        #for result in single_results:
+        #    print(json.dumps(result, indent=4, ensure_ascii=False))
+    else:
+        print("Failed to verify endpoints. Please check if servers are running correctly.")
 
-# Run the async main function
 if __name__ == "__main__":
     asyncio.run(main())
