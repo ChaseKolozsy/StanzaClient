@@ -272,6 +272,8 @@ async def test_endpoints():
 async def main():
     if await test_endpoints():
         results = await test_processing()
+        #for result in results:
+        #    print(json.dumps(result, indent=4, ensure_ascii=False))
     else:
         print("Failed to verify endpoints. Please check if servers are running correctly.")
 
