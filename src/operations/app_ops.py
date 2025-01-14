@@ -69,17 +69,35 @@ language_abreviations = {
     "Zulu": "zu"
 }
 
+class StanzaClient:
+    def __init__(self):
+        self.current_language = None
+
+    def select_language(self, language):
+        self.current_language = language
+        return True
+
+    def process_text(self, text):
+        if not self.current_language:
+            raise ValueError("Language not selected")
+        
+        endpoint = BASE_URL + "/process"
+        data = {
+            "language": self.current_language,
+            "text": text
+        }
+        response = requests.post(endpoint, json=data)
+        return response
+
+# Create a singleton instance
+_client = StanzaClient()
+
+# Keep the existing interface
 def select_language(language):
-    endpoint = BASE_URL + "/select_language"
-    data = {"language": language}
-    response = requests.post(endpoint, json=data)
-    return response
+    return _client.select_language(language)
 
 def process_text(text):
-    endpoint = BASE_URL + "/process"
-    data = {"text": text}
-    response = requests.post(endpoint, json=data)
-    return response
+    return _client.process_text(text)
 
 if __name__ == "__main__":
     import json
