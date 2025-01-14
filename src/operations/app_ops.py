@@ -84,9 +84,8 @@ language_abreviations = {
 class StanzaClient:
     def __init__(self):
         self.current_language = None
-        self.client = httpx.AsyncClient(timeout=30.0)  # Increased timeout for network calls
+        self.client = httpx.AsyncClient(timeout=30.0)
         self.current_endpoint = 0
-        self.batch_size = 1000
         self.endpoint_health = {endpoint: True for endpoint in ENDPOINTS}
 
     async def __aenter__(self):
@@ -99,11 +98,10 @@ class StanzaClient:
         self.current_language = language
         return True
 
-    async def _try_endpoint(self, endpoint, data, is_batch=False):
+    async def _try_endpoint(self, endpoint, data):
         """Attempt to use an endpoint and mark it as unhealthy if it fails"""
         try:
-            endpoint_path = "/batch_process" if is_batch else "/process"
-            response = await self.client.post(f"{endpoint}{endpoint_path}", json=data)
+            response = await self.client.post(f"{endpoint}/process", json=data)
             self.endpoint_health[endpoint] = True
             return response
         except Exception as e:
@@ -135,31 +133,6 @@ class StanzaClient:
                 
         raise Exception("No healthy endpoints available")
 
-    async def process_batch(self, texts: List[str]):
-        if not self.current_language:
-            raise ValueError("Language not selected")
-        
-        # Find next healthy endpoint
-        attempts = 0
-        while attempts < len(ENDPOINTS):
-            endpoint = ENDPOINTS[self.current_endpoint]
-            self.current_endpoint = (self.current_endpoint + 1) % len(ENDPOINTS)
-            
-            if self.endpoint_health[endpoint]:
-                try:
-                    data = {
-                        "language": self.current_language,
-                        "texts": texts
-                    }
-                    return await self._try_endpoint(endpoint, data, is_batch=True)
-                except Exception as e:
-                    attempts += 1
-                    continue
-            else:
-                attempts += 1
-                
-        raise Exception("No healthy endpoints available")
-
 # Create a singleton instance
 _client = StanzaClient()
 
@@ -170,7 +143,7 @@ def select_language(language):
 async def process_text(text):
     return await _client.process_text(text)
 
-async def test_processing(mode: str = "single"):
+async def test_processing():
     hungarian_phrases = [
         "A kutya az ember legjobb barátja.",
         "Esik az eső a mezőn.",
@@ -248,46 +221,35 @@ async def test_processing(mode: str = "single"):
 
     select_language("hu")
     start_time = time.time()
-    batch_results = []
-    single_results = []
+    results = []
 
-    if mode == "batch":
-        print(f"Processing {len(hungarian_phrases)} Hungarian phrases in batch mode...")
+    print(f"Processing {len(hungarian_phrases)} Hungarian phrases...")
+    # Create tasks for all phrases
+    tasks = [_client.process_text(phrase) for phrase in hungarian_phrases]
+    
+    # Execute all tasks concurrently
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for phrase, response in zip(hungarian_phrases, responses):
         try:
-            response = await _client.process_batch(hungarian_phrases)
+            if isinstance(response, Exception):
+                print(f"Error processing phrase: {str(response)}")
+                continue
+                
             if response.status_code == 200:
-                batch_results = response.json()
+                results.append(response.json())
         except Exception as e:
-            print(f"Error in batch processing: {str(e)}")
-
-    else:  # single mode
-        print(f"Processing {len(hungarian_phrases)} Hungarian phrases in single mode...")
-        # Create tasks for all phrases
-        tasks = [_client.process_text(phrase) for phrase in hungarian_phrases]
-        
-        # Execute all tasks concurrently
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for phrase, response in zip(hungarian_phrases, responses):
-            try:
-                if isinstance(response, Exception):
-                    print(f"Error processing phrase: {str(response)}")
-                    continue
-                    
-                if response.status_code == 200:
-                    single_results.append(response.json())
-            except Exception as e:
-                print(f"Error processing phrase: {str(e)}")
+            print(f"Error processing phrase: {str(e)}")
 
     end_time = time.time()
     processing_time = end_time - start_time
 
     print(f"\nProcessing Summary:")
-    print(f"Mode: {mode}")
     print(f"Total phrases processed: {len(hungarian_phrases)}")
     print(f"Total processing time: {processing_time:.2f} seconds")
     print(f"Average time per phrase: {processing_time/len(hungarian_phrases):.2f} seconds")
-    return batch_results, single_results
+    print(f"Phrases per second: {len(hungarian_phrases)/processing_time:.2f}")
+    return results
 
 async def test_endpoints():
     """Test if all endpoints are accessible"""
@@ -308,18 +270,8 @@ async def test_endpoints():
     return healthy_endpoints > 0
 
 async def main():
-    # First test if endpoints are available
     if await test_endpoints():
-        # Test both modes
-        print("Testing single mode:")
-        batch_results, single_results = await test_processing(mode="single")
-        
-        print("\nTesting batch mode:")
-        batch_results, single_results = await test_processing(mode="batch")
-        #for result in batch_results:
-        #    print(json.dumps(result, indent=4, ensure_ascii=False))
-        #for result in single_results:
-        #    print(json.dumps(result, indent=4, ensure_ascii=False))
+        results = await test_processing()
     else:
         print("Failed to verify endpoints. Please check if servers are running correctly.")
 
