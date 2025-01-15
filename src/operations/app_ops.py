@@ -135,14 +135,19 @@ class StanzaClient:
         if not healthy_endpoints:
             raise Exception("No healthy endpoints available")
         
-        # Identify 5006 endpoints and other endpoints
-        endpoints_5006 = [ep for ep in healthy_endpoints if ep.endswith(":5006")]
-        other_endpoints = [ep for ep in healthy_endpoints if not ep.endswith(":5006")]
+        # Identify priority endpoints and other endpoints
+        priority_endpoints = [
+            ep for ep in healthy_endpoints 
+            if ep in ["http://localhost:5004", "http://localhost:5005", "http://10.0.0.115:5006"]
+        ]
+        other_endpoints = [ep for ep in healthy_endpoints if ep not in priority_endpoints]
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        chunk_size_5006 = total_texts // 4  # Each 5006 endpoint gets 1/4
-        remaining_texts = total_texts - (chunk_size_5006 * len(endpoints_5006))  # Remaining 1/2
+        total_priority_texts = total_texts // 2  # 50% for priority endpoints
+        chunk_size_priority = total_priority_texts // len(priority_endpoints)  # Split evenly between priority endpoints
+        
+        remaining_texts = total_texts - total_priority_texts
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
         remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
         
@@ -151,9 +156,9 @@ class StanzaClient:
         endpoints = []
         start = 0
         
-        # Add chunks for 5006 endpoints
-        for endpoint in endpoints_5006:
-            end = start + chunk_size_5006
+        # Add chunks for priority endpoints
+        for endpoint in priority_endpoints:
+            end = start + chunk_size_priority
             chunks.append(texts[start:end])
             endpoints.append(endpoint)
             start = end
