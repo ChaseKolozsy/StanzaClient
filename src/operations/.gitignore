@@ -99,4 +99,4 @@ ENV/
 .vscode/
 last_commit.txt
 
-out.txt
+out*
