@@ -141,9 +141,9 @@ class StanzaClient:
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        priority_texts = total_texts // 3  # 33.33% for priority endpoint
+        priority_texts = (total_texts * 4) // 10  # 40% for priority endpoint
         
-        remaining_texts = total_texts - priority_texts  # 66.67% for other endpoints
+        remaining_texts = total_texts - priority_texts  # 60% for other endpoints
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
         remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
         
