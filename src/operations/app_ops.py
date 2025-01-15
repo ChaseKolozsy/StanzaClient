@@ -52,7 +52,7 @@ language_abreviations = {
     "Afrikaans": "af",
     "Bosnian": "bs",
     "Danish": "da",
-    "Flemish": "vls",  # Corrected duplicate
+    "Flemish": "vls",
     "Hebrew": "he",
     "Hindi": "hi",
     "Urdu": "ur",
@@ -78,7 +78,29 @@ language_abreviations = {
     "Pashto": "ps",
     "Amharic": "am",
     "Yoruba": "yo",
-    "Zulu": "zu"
+    "Zulu": "zu",
+    "AncientGreek": "grc",
+    "Basque": "eu",
+    "Belarusian": "be",
+    "ClassicalChinese": "lzh",
+    "Coptic": "cop",
+    "Faroese": "fo",
+    "Galician": "gl",
+    "Gothic": "got",
+    "Marathi": "mr",
+    "Naija": "pcm",
+    "NorthSami": "sme",
+    "OldChurchSlavonic": "cu",
+    "OldEastSlavic": "orv",
+    "OldFrench": "fro",
+    "Persian": "fa",
+    "Sanskrit": "sa",
+    "ScottishGaelic": "gd",
+    "SwedishSign Language": "swl",
+    "TurkishGerman": "qtd",
+    "Uyghur": "ug",
+    "WesternArmenian": "hyw",
+    "Wolof": "wo"
 }
 
 class StanzaClient:
