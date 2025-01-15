@@ -135,19 +135,15 @@ class StanzaClient:
         if not healthy_endpoints:
             raise Exception("No healthy endpoints available")
         
-        # Identify priority endpoints and other endpoints
-        priority_endpoints = [
-            ep for ep in healthy_endpoints 
-            if ep in ["http://localhost:5004", "http://localhost:5005", "http://10.0.0.115:5006"]
-        ]
-        other_endpoints = [ep for ep in healthy_endpoints if ep not in priority_endpoints]
+        # Identify priority endpoint and other endpoints
+        priority_endpoint = "http://10.0.0.115:5006"
+        other_endpoints = [ep for ep in healthy_endpoints if ep != priority_endpoint]
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        total_priority_texts = total_texts // 2  # 50% for priority endpoints
-        chunk_size_priority = total_priority_texts // len(priority_endpoints)  # Split evenly between priority endpoints
+        priority_texts = total_texts // 4  # 25% for priority endpoint
         
-        remaining_texts = total_texts - total_priority_texts
+        remaining_texts = total_texts - priority_texts  # 75% for other endpoints
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
         remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
         
@@ -156,12 +152,11 @@ class StanzaClient:
         endpoints = []
         start = 0
         
-        # Add chunks for priority endpoints
-        for endpoint in priority_endpoints:
-            end = start + chunk_size_priority
-            chunks.append(texts[start:end])
-            endpoints.append(endpoint)
-            start = end
+        # Add chunk for priority endpoint if it's healthy
+        if priority_endpoint in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts])
+            endpoints.append(priority_endpoint)
+            start += priority_texts
         
         # Add chunks for other endpoints
         for i, endpoint in enumerate(other_endpoints):
