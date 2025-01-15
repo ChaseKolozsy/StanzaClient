@@ -9,9 +9,7 @@ import logging
 # Update ENDPOINTS to include all machines and ports
 ENDPOINTS = [
     "http://localhost:5004",
-    "http://localhost:5005",
     "http://10.0.0.138:5004",
-    "http://10.0.0.138:5005",
     "http://10.0.0.138:5006",
     "http://10.0.0.115:5004",
     "http://10.0.0.115:5005",
