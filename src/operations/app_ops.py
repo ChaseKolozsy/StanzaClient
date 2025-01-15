@@ -128,7 +128,6 @@ class StanzaClient:
         return True
 
     async def process_batch(self, texts: List[str]):
-        """Process a batch of texts by distributing them across available endpoints"""
         if not self.current_language:
             raise ValueError("Language not selected")
         
@@ -136,17 +135,35 @@ class StanzaClient:
         if not healthy_endpoints:
             raise Exception("No healthy endpoints available")
         
-        # Distribute the current batch across healthy endpoints
-        num_endpoints = len(healthy_endpoints)
-        base_chunk_size = len(texts) // num_endpoints
-        remainder = len(texts) % num_endpoints
+        # Identify 5006 endpoints and other endpoints
+        endpoints_5006 = [ep for ep in healthy_endpoints if ep.endswith(":5006")]
+        other_endpoints = [ep for ep in healthy_endpoints if not ep.endswith(":5006")]
         
+        # Calculate chunk sizes
+        total_texts = len(texts)
+        chunk_size_5006 = total_texts // 4  # Each 5006 endpoint gets 1/4
+        remaining_texts = total_texts - (chunk_size_5006 * len(endpoints_5006))  # Remaining 1/2
+        base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
+        remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
+        
+        # Prepare chunks
         chunks = []
+        endpoints = []
         start = 0
-        for i in range(num_endpoints):
-            current_chunk_size = base_chunk_size + (1 if i < remainder else 0)
-            end = start + current_chunk_size
+        
+        # Add chunks for 5006 endpoints
+        for endpoint in endpoints_5006:
+            end = start + chunk_size_5006
             chunks.append(texts[start:end])
+            endpoints.append(endpoint)
+            start = end
+        
+        # Add chunks for other endpoints
+        for i, endpoint in enumerate(other_endpoints):
+            chunk_size = base_chunk_size_others + (1 if i < remainder_others else 0)
+            end = start + chunk_size
+            chunks.append(texts[start:end])
+            endpoints.append(endpoint)
             start = end
 
         async def process_chunk(endpoint: str, chunk: List[str], chunk_id: int):
@@ -167,14 +184,13 @@ class StanzaClient:
                 logging.error(f"Error processing sub-batch {chunk_id} on {endpoint}: {str(e)}")
                 return []
 
-        # Process all chunks for this batch in parallel
+        # Process all chunks in parallel
         tasks = [
             process_chunk(endpoint, chunk, i)
-            for i, (endpoint, chunk) in enumerate(zip(healthy_endpoints, chunks))
+            for i, (endpoint, chunk) in enumerate(zip(endpoints, chunks))
         ]
         
         try:
-            # Wait for all parallel chunks to complete
             all_results = []
             results = await asyncio.gather(*tasks)
             for chunk_results in results:
