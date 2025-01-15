@@ -141,7 +141,7 @@ class StanzaClient:
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        priority_texts = (total_texts * 4) // 10  # 40% for priority endpoint
+        priority_texts = total_texts  // 3  # 33% for priority endpoint
         
         remaining_texts = total_texts - priority_texts  # 60% for other endpoints
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
@@ -166,35 +166,68 @@ class StanzaClient:
             endpoints.append(endpoint)
             start = end
 
-        async def process_chunk(endpoint: str, chunk: List[str], chunk_id: int):
-            data = {
-                "language": self.current_language,
-                "texts": chunk
-            }
-            logging.info(f"Starting sub-batch {chunk_id} with {len(chunk)} texts on endpoint {endpoint}")
+        async def process_chunk_with_retry(endpoint: str, chunk: List[str], chunk_id: int, max_retries: int = 3):
+            retries = 0
+            last_exception = None
+            
+            while retries < max_retries:
+                try:
+                    data = {
+                        "language": self.current_language,
+                        "texts": chunk
+                    }
+                    
+                    # Exponential backoff: 0.5s, 1s, 2s
+                    if retries > 0:
+                        await asyncio.sleep(0.5 * (2 ** (retries - 1)))
+                        logging.info(f"Retry {retries} for chunk {chunk_id} on endpoint {endpoint}")
+                    
+                    response = await self.client.post(f"{endpoint}/batch_process", json=data)
+                    
+                    if response.status_code == 200:
+                        logging.info(f"Completed sub-batch {chunk_id} on endpoint {endpoint}")
+                        return response.json()
+                    
+                    last_exception = Exception(f"HTTP {response.status_code}")
+                    
+                except Exception as e:
+                    last_exception = e
+                    logging.error(f"Error (attempt {retries + 1}) processing sub-batch {chunk_id} on {endpoint}: {str(e)}")
+                
+                retries += 1
+            
+            # If all retries failed, try to redistribute to another endpoint
             try:
-                response = await self.client.post(f"{endpoint}/batch_process", json=data)
-                if response.status_code == 200:
-                    logging.info(f"Completed sub-batch {chunk_id} on endpoint {endpoint}")
-                    return response.json()
-                else:
-                    logging.error(f"Sub-batch {chunk_id} failed with status {response.status_code}")
-                    return []
+                alternate_endpoints = [ep for ep in healthy_endpoints if ep != endpoint]
+                if alternate_endpoints:
+                    fallback_endpoint = alternate_endpoints[0]  # Pick first available alternate
+                    logging.info(f"Redistributing chunk {chunk_id} to {fallback_endpoint} after {endpoint} failed")
+                    return await process_chunk_with_retry(fallback_endpoint, chunk, chunk_id, max_retries=1)
             except Exception as e:
-                logging.error(f"Error processing sub-batch {chunk_id} on {endpoint}: {str(e)}")
-                return []
+                logging.error(f"Failed to redistribute chunk {chunk_id}: {str(e)}")
+            
+            logging.error(f"All retries failed for chunk {chunk_id} on {endpoint}")
+            raise last_exception
 
-        # Process all chunks in parallel
+        # Process all chunks in parallel with retry logic
         tasks = [
-            process_chunk(endpoint, chunk, i)
+            process_chunk_with_retry(endpoint, chunk, i)
             for i, (endpoint, chunk) in enumerate(zip(endpoints, chunks))
         ]
         
         try:
             all_results = []
-            results = await asyncio.gather(*tasks)
-            for chunk_results in results:
-                all_results.extend(chunk_results)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Handle results and any exceptions
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logging.error(f"Chunk {i} failed completely: {str(result)}")
+                else:
+                    all_results.extend(result)
+            
+            if not all_results:
+                raise Exception("All chunks failed processing")
             
             logging.info(f"Completed processing batch of {len(texts)} texts across {len(healthy_endpoints)} endpoints")
             return all_results
