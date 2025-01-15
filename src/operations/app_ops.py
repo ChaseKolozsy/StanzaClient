@@ -106,9 +106,10 @@ language_abreviations = {
 class StanzaClient:
     def __init__(self):
         self.current_language = None
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(timeout=60.0)  # Increased timeout for batch processing
         self.current_endpoint = 0
         self.endpoint_health = {endpoint: True for endpoint in ENDPOINTS}
+        self.batch_size = 50  # Match server's MAX_TEXTS_PER_BATCH
 
     async def __aenter__(self):
         return self
@@ -120,17 +121,19 @@ class StanzaClient:
         self.current_language = language
         return True
 
-    async def _try_endpoint(self, endpoint, data):
+    async def _try_endpoint(self, endpoint, data, is_batch=False):
         """Attempt to use an endpoint and mark it as unhealthy if it fails"""
         try:
-            response = await self.client.post(f"{endpoint}/process", json=data)
+            endpoint_path = "/batch_process" if is_batch else "/process"
+            response = await self.client.post(f"{endpoint}{endpoint_path}", json=data)
             self.endpoint_health[endpoint] = True
             return response
         except Exception as e:
             self.endpoint_health[endpoint] = False
             raise e
 
-    async def process_text(self, text: str):
+    async def process_batch(self, texts: List[str]):
+        """Process multiple texts in a single batch request"""
         if not self.current_language:
             raise ValueError("Language not selected")
         
@@ -144,9 +147,9 @@ class StanzaClient:
                 try:
                     data = {
                         "language": self.current_language,
-                        "text": text
+                        "texts": texts
                     }
-                    return await self._try_endpoint(endpoint, data)
+                    return await self._try_endpoint(endpoint, data, is_batch=True)
                 except Exception as e:
                     attempts += 1
                     continue
@@ -245,29 +248,32 @@ async def test_processing():
     start_time = time.time()
     results = []
 
-    print(f"Processing {len(hungarian_phrases)} Hungarian phrases...")
-    # Create tasks for all phrases
-    tasks = [_client.process_text(phrase) for phrase in hungarian_phrases]
+    print(f"Processing {len(hungarian_phrases)} Hungarian phrases using batch processing...")
     
-    # Execute all tasks concurrently
-    responses = await asyncio.gather(*tasks, return_exceptions=True)
+    # Split phrases into batches
+    batch_size = _client.batch_size
+    batches = [hungarian_phrases[i:i + batch_size] 
+               for i in range(0, len(hungarian_phrases), batch_size)]
     
-    for phrase, response in zip(hungarian_phrases, responses):
+    # Process each batch
+    for i, batch in enumerate(batches, 1):
         try:
-            if isinstance(response, Exception):
-                print(f"Error processing phrase: {str(response)}")
-                continue
-                
+            response = await process_batch(batch)
             if response.status_code == 200:
-                results.append(response.json())
+                batch_results = response.json()
+                results.extend(batch_results)
+                print(f"Processed batch {i}/{len(batches)} "
+                      f"({len(batch)} phrases)")
         except Exception as e:
-            print(f"Error processing phrase: {str(e)}")
+            print(f"Error processing batch {i}: {str(e)}")
 
     end_time = time.time()
     processing_time = end_time - start_time
 
     print(f"\nProcessing Summary:")
     print(f"Total phrases processed: {len(hungarian_phrases)}")
+    print(f"Number of batches: {len(batches)}")
+    print(f"Batch size: {batch_size}")
     print(f"Total processing time: {processing_time:.2f} seconds")
     print(f"Average time per phrase: {processing_time/len(hungarian_phrases):.2f} seconds")
     print(f"Phrases per second: {len(hungarian_phrases)/processing_time:.2f}")
@@ -298,6 +304,10 @@ async def main():
         #    print(json.dumps(result, indent=4, ensure_ascii=False))
     else:
         print("Failed to verify endpoints. Please check if servers are running correctly.")
+
+# Add new batch interface
+async def process_batch(texts: List[str]):
+    return await _client.process_batch(texts)
 
 if __name__ == "__main__":
     asyncio.run(main())
