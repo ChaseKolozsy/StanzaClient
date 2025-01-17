@@ -9,11 +9,21 @@ import logging
 # Update ENDPOINTS to include all machines and ports
 ENDPOINTS = [
     "http://localhost:5004",
+    "http://localhost:5005",
+    "http://localhost:5006",
+    "http://localhost:5007",
+    "http://localhost:5008",
+    "http://localhost:5009",
+    "http://localhost:5010",
+    "http://localhost:5011",
+    "http://localhost:5012",
+    "http://localhost:5013",
     "http://10.0.0.138:5004",
     "http://10.0.0.138:5006",
     "http://10.0.0.115:5004",
     "http://10.0.0.115:5005",
-    "http://10.0.0.115:5006"
+    "http://10.0.0.115:5006",
+    "http://10.0.0.115:5007"
 ]
 
 language_abreviations = {
@@ -125,6 +135,13 @@ class StanzaClient:
         self.current_language = language
         return True
 
+    async def process_text(self, text: str):
+        if not self.current_language:
+            raise ValueError("Language not selected")
+        response = await self.client.post("/process", json={"text": text})
+        return response.json()
+        
+
     async def process_batch(self, texts: List[str]):
         if not self.current_language:
             raise ValueError("Language not selected")
@@ -134,14 +151,23 @@ class StanzaClient:
             raise Exception("No healthy endpoints available")
         
         # Identify priority endpoint and other endpoints
-        priority_endpoint = "http://10.0.0.115:5006"
-        other_endpoints = [ep for ep in healthy_endpoints if ep != priority_endpoint]
+        priority_endpoint_1 = "http://10.0.0.115:5004"
+        priority_endpoint_2 = "http://10.0.0.115:5005"
+        priority_endpoint_3 = "http://10.0.0.115:5006"
+        priority_endpoint_4 = "http://10.0.0.115:5007"
+        priority_endpoint_5 = "http://10.0.0.138:5006"
+
+        other_endpoints = [ep for ep in healthy_endpoints if ep != priority_endpoint_1 and ep != priority_endpoint_2]
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        priority_texts = total_texts  // 3  # 33% for priority endpoint
+        priority_texts_1 = int(total_texts * 0.15) or 1.0
+        priority_texts_2 = int(total_texts * 0.15) or 1.0
+        priority_texts_3 = int(total_texts * 0.15) or 1.0
+        priority_texts_4 = int(total_texts * 0.15) or 1.0
+        priority_texts_5 = int(total_texts * 0.15) or 1.0
         
-        remaining_texts = total_texts - priority_texts  # 60% for other endpoints
+        remaining_texts = total_texts - priority_texts_1 - priority_texts_2  # Remaining for other endpoints
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
         remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
         
@@ -150,11 +176,35 @@ class StanzaClient:
         endpoints = []
         start = 0
         
-        # Add chunk for priority endpoint if it's healthy
-        if priority_endpoint in healthy_endpoints:
-            chunks.append(texts[start:start + priority_texts])
-            endpoints.append(priority_endpoint)
-            start += priority_texts
+        # Add chunk for priority endpoint 1 if it's healthy
+        if priority_endpoint_1 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_1])
+            endpoints.append(priority_endpoint_1)
+            start += priority_texts_1
+        
+        # Add chunk for priority endpoint 2 if it's healthy
+        if priority_endpoint_2 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_2])
+            endpoints.append(priority_endpoint_2)
+            start += priority_texts_2
+        
+        # Add chunk for priority endpoint 3 if it's healthy
+        if priority_endpoint_3 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_3])
+            endpoints.append(priority_endpoint_3)
+            start += priority_texts_3
+        
+        # Add chunk for priority endpoint 4 if it's healthy
+        if priority_endpoint_4 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_4])
+            endpoints.append(priority_endpoint_4)
+            start += priority_texts_4
+        
+        # Add chunk for priority endpoint 5 if it's healthy
+        if priority_endpoint_5 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_5])
+            endpoints.append(priority_endpoint_5)
+            start += priority_texts_5
         
         # Add chunks for other endpoints
         for i, endpoint in enumerate(other_endpoints):
@@ -242,8 +292,11 @@ def select_language(language):
     return _client.select_language(language)
 
 async def test_processing():
-
     hungarian_phrases = []
+
+    with open("out.txt", "r") as f:
+        for line in f.readlines():
+            hungarian_phrases.append(line.strip())
 
     select_language("hu")
     start_time = time.time()
@@ -277,7 +330,9 @@ async def test_processing():
     print(f"Total processing time: {processing_time:.2f} seconds")
     print(f"Average time per phrase: {processing_time/len(hungarian_phrases):.2f} seconds")
     print(f"Phrases per second: {len(hungarian_phrases)/processing_time:.2f}")
-    return results
+    #for result in results:
+    #    print(json.dumps(result, indent=4, ensure_ascii=False))
+    #return results
 
 async def test_endpoints():
     """Test if all endpoints are accessible"""
@@ -308,6 +363,9 @@ async def main():
 # Add new batch interface
 async def process_batch(texts: List[str]):
     return await _client.process_batch(texts)
+
+async def process_text(text: str):
+    return await _client.process_text(text)
 
 if __name__ == "__main__":
     asyncio.run(main())
