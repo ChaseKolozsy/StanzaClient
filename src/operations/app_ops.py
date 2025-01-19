@@ -23,7 +23,11 @@ ENDPOINTS = [
     "http://10.0.0.115:5004",
     "http://10.0.0.115:5005",
     "http://10.0.0.115:5006",
-    "http://10.0.0.115:5007"
+    "http://10.0.0.115:5007",
+    "http://10.0.0.115:5008",
+    "http://10.0.0.115:5009",
+    "http://10.0.0.115:5010",
+    "http://10.0.0.115:5011",
 ]
 
 language_abreviations = {
@@ -155,18 +159,26 @@ class StanzaClient:
         priority_endpoint_2 = "http://10.0.0.115:5005"
         priority_endpoint_3 = "http://10.0.0.115:5006"
         priority_endpoint_4 = "http://10.0.0.115:5007"
-        priority_endpoint_5 = "http://10.0.0.138:5006"
-
+        priority_endpoint_5 = "http://10.0.0.115:5008"
+        priority_endpoint_6 = "http://10.0.0.115:5009"
+        priority_endpoint_7 = "http://10.0.0.115:5010"
+        priority_endpoint_8 = "http://10.0.0.115:5011"
+        priority_endpoint_9 = "http://10.0.0.138:5004"
+        priority_endpoint_10 = "http://10.0.0.138:5006"
         other_endpoints = [ep for ep in healthy_endpoints if ep != priority_endpoint_1 and ep != priority_endpoint_2]
         
         # Calculate chunk sizes
         total_texts = len(texts)
-        priority_texts_1 = int(total_texts * 0.15) or 1.0
-        priority_texts_2 = int(total_texts * 0.15) or 1.0
-        priority_texts_3 = int(total_texts * 0.15) or 1.0
-        priority_texts_4 = int(total_texts * 0.15) or 1.0
-        priority_texts_5 = int(total_texts * 0.15) or 1.0
-        
+        priority_texts_1 = int(total_texts * 0.08676) or 1.0
+        priority_texts_2 = int(total_texts * 0.08676) or 1.0
+        priority_texts_3 = int(total_texts * 0.08676) or 1.0
+        priority_texts_4 = int(total_texts * 0.08676) or 1.0
+        priority_texts_5 = int(total_texts * 0.08676) or 1.0
+        priority_texts_6 = int(total_texts * 0.08676) or 1.0
+        priority_texts_7 = int(total_texts * 0.08676) or 1.0
+        priority_texts_8 = int(total_texts * 0.08676) or 1.0
+        priority_texts_9 = int(total_texts * 0.08676) or 1.0
+        priority_texts_10 = int(total_texts * 0.08676) or 1.0
         remaining_texts = total_texts - priority_texts_1 - priority_texts_2  # Remaining for other endpoints
         base_chunk_size_others = remaining_texts // len(other_endpoints) if other_endpoints else 0
         remainder_others = remaining_texts % len(other_endpoints) if other_endpoints else 0
@@ -205,6 +217,36 @@ class StanzaClient:
             chunks.append(texts[start:start + priority_texts_5])
             endpoints.append(priority_endpoint_5)
             start += priority_texts_5
+
+        # Add chunk for priority endpoint 6 if it's healthy
+        if priority_endpoint_6 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_6])
+            endpoints.append(priority_endpoint_6)
+            start += priority_texts_6
+        
+        # Add chunk for priority endpoint 7 if it's healthy
+        if priority_endpoint_7 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_7])
+            endpoints.append(priority_endpoint_7)
+            start += priority_texts_7
+        
+        # Add chunk for priority endpoint 8 if it's healthy
+        if priority_endpoint_8 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_8])
+            endpoints.append(priority_endpoint_8)
+            start += priority_texts_8
+
+        # Add chunk for priority endpoint 9 if it's healthy
+        if priority_endpoint_9 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_9])
+            endpoints.append(priority_endpoint_9)
+            start += priority_texts_9
+
+        # Add chunk for priority endpoint 10 if it's healthy
+        if priority_endpoint_10 in healthy_endpoints:
+            chunks.append(texts[start:start + priority_texts_10])
+            endpoints.append(priority_endpoint_10)
+            start += priority_texts_10
         
         # Add chunks for other endpoints
         for i, endpoint in enumerate(other_endpoints):
