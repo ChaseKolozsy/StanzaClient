@@ -30,6 +30,11 @@ ENDPOINTS = [
     "http://10.0.0.115:5011",
 ]
 
+clear_memory_endpoints = [
+    "http://10.0.0.115:5050",
+    "http://10.0.0.138:5050",
+]
+
 language_abreviations = {
     "Hungarian": "hu",
     "English": "en",
@@ -379,6 +384,16 @@ async def test_processing():
 async def test_endpoints():
     """Test if all endpoints are accessible"""
     healthy_endpoints = 0
+    for endpoint in clear_memory_endpoints:
+        try:
+            response = await _client.client.post(f"{endpoint}/clear_memory")
+            if response.status_code == 200:
+                print(f"✅ Memory cleared on {endpoint}")
+            else:
+                print(f"⚠️ Endpoint {endpoint} returned status {response.status_code}")
+        except Exception as e:
+            print(f"❌ Error testing endpoint {endpoint}: {str(e)}")
+
     for endpoint in ENDPOINTS:
         try:
             test_payload = {"language": "hu", "text": "test"}
