@@ -150,7 +150,23 @@ class StanzaClient:
     async def process_text(self, text: str):
         if not self.current_language:
             raise ValueError("Language not selected")
-        response = await self.client.post("/process", json={"text": text})
+        
+        # Get a healthy endpoint
+        healthy_endpoints = [ep for ep in ENDPOINTS if self.endpoint_health[ep]]
+        if not healthy_endpoints:
+            raise Exception("No healthy endpoints available")
+        
+        # Use the next available endpoint
+        endpoint = healthy_endpoints[self.current_endpoint % len(healthy_endpoints)]
+        self.current_endpoint += 1
+        
+        response = await self.client.post(
+            f"{endpoint}/process", 
+            json={
+                "text": text,
+                "language": self.current_language  # Add language to the request
+            }
+        )
         return response.json()
         
 
@@ -436,13 +452,35 @@ async def test_endpoints():
     print(f"\nFound {healthy_endpoints} healthy endpoints out of {len(ENDPOINTS)}")
     return healthy_endpoints > 0
 
+async def test_single_sentence_processing():
+    """Test processing a single Hungarian sentence"""
+    sentence = "A gyors barna róka átugorik a lusta kutyán."
+    
+    print("\nTesting single sentence processing...")
+    select_language("hu")
+    
+    try:
+        start_time = time.time()
+        result = await process_text(sentence)
+        processing_time = time.time() - start_time
+        
+        print(f"Successfully processed sentence in {processing_time:.2f} seconds")
+        print("Result:")
+        print(json.dumps(result, indent=4, ensure_ascii=False))
+        return result
+    except Exception as e:
+        print(f"Error processing sentence: {str(e)}")
+        traceback.print_exc()
+        return None
+
 async def main():
-    if await test_endpoints():
-        results = await test_processing()
-        #for result in results:
-        #    print(json.dumps(result, indent=4, ensure_ascii=False))
-    else:
-        print("Failed to verify endpoints. Please check if servers are running correctly.")
+    await test_single_sentence_processing()
+    
+    ## Then run the full batch test if endpoints are healthy
+    #if await test_endpoints():
+    #    results = await test_processing()
+    #else:
+    #    print("Failed to verify endpoints. Please check if servers are running correctly.")
 
 # Add new batch interface
 async def process_batch(texts: List[str]):
