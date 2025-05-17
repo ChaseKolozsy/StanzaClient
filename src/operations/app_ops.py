@@ -169,6 +169,19 @@ class StanzaClient:
         )
         return response.json()
         
+    async def process_batch_with_single_endpoint(self, texts: List[str], endpoint: str):
+        if not self.current_language:
+            raise ValueError("Language not selected")
+        
+        response = await self.client.post(
+            f"{endpoint}/batch_process", 
+            json={
+                "language": self.current_language,
+                "texts": texts
+            }
+        )
+        return response.json()
+    
 
     async def process_batch(self, texts: List[str]):
         if not self.current_language:
@@ -485,6 +498,9 @@ async def main():
 # Add new batch interface
 async def process_batch(texts: List[str]):
     return await _client.process_batch(texts)
+
+async def process_batch_with_single_endpoint(texts: List[str], endpoint: str):
+    return await _client.process_batch_with_single_endpoint(texts=texts, endpoint=endpoint)
 
 async def process_text(text: str):
     return await _client.process_text(text)
